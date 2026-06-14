@@ -1,0 +1,9 @@
+node_modules/
+openapi/
+spec/
+.git/
+.github/
+.vscode/
+*.md
+.gitignore
+.dockerignore
