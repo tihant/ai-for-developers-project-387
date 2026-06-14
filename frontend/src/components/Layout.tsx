@@ -7,7 +7,10 @@ export default function Layout() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="text-xl font-bold">
+          <Link to="/" className="text-xl font-bold flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground text-sm font-extrabold">
+              CB
+            </span>
             Calendar Booking
           </Link>
           <nav className="flex gap-2">
