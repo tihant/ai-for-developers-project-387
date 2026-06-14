@@ -11,7 +11,7 @@ export default function Layout() {
             <span className="inline-flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground text-sm font-extrabold">
               CB
             </span>
-            Calendar Booking
+            CALENDAR BOOKING
           </Link>
           <nav className="flex gap-2">
             <Link to="/" className={buttonVariants({ variant: 'ghost' })}>
