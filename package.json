@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "compile": "tsp compile spec/"
+    "compile": "tsp compile spec/",
+    "lighthouse": "lighthouse https://ai-for-developers-project-386-qmst.onrender.com --output=html,json --output-path=./lighthouse-report --view",
+    "lighthouse:local": "cd frontend && npm run build && npx vite preview --port 4173 & sleep 2 && lighthouse http://localhost:4173 --output=html,json --output-path=./lighthouse-report --view; kill %1"
   },
   "dependencies": {
     "@typespec/compiler": "^1.0.0",

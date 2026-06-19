@@ -1,0 +1,126 @@
+name: Lighthouse Audit
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Every night at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to audit'
+        required: false
+        default: 'https://ai-for-developers-project-386-qmst.onrender.com'
+        type: string
+      mobile:
+        description: 'Run on mobile device preset'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Lighthouse CLI
+        run: |
+          npm install -g lighthouse
+          lighthouse --version
+
+      - name: Run Lighthouse audit
+        id: audit
+        run: |
+          URL="${{ inputs.url || 'https://ai-for-developers-project-386-qmst.onrender.com' }}"
+          echo "Auditing: $URL"
+
+          PRESET_ARG=""
+          if [[ "${{ inputs.mobile }}" != "true" ]]; then
+            PRESET_ARG="--preset=desktop"
+          fi
+
+          lighthouse "$URL" \
+            --output=html,json \
+            --output-path=./lighthouse-report \
+            --chrome-flags="--headless --no-sandbox" \
+            $PRESET_ARG
+
+          echo "Report generated at:"
+          ls -la ./lighthouse-report.*
+
+          # Extract key metrics from JSON
+          PERFORMANCE=$(jq '.categories.performance.score * 100 | floor' lighthouse-report.json)
+          ACCESSIBILITY=$(jq '.categories.accessibility.score | (. * 100 | floor // "N/A")' lighthouse-report.json)
+          BEST_PRACTICES=$(jq '.categories["best-practices"].score | (. * 100 | floor // "N/A")' lighthouse-report.json)
+          SEO=$(jq '.categories.seo.score | (. * 100 | floor // "N/A")' lighthouse-report.json)
+          FCP=$(jq '.audits["first-contentful-paint"].displayValue // "N/A"' lighthouse-report.json)
+          SI=$(jq '.audits["speed-index"].displayValue // "N/A"' lighthouse-report.json)
+          LCP=$(jq '.audits["largest-contentful-paint"].displayValue // "N/A"' lighthouse-report.json)
+          TBT=$(jq '.audits["total-blocking-time"].displayValue // "N/A"' lighthouse-report.json)
+          CLS=$(jq '.audits["cumulative-layout-shift"].displayValue // "N/A"' lighthouse-report.json)
+
+          echo "PERFORMANCE=${PERFORMANCE}" >> $GITHUB_OUTPUT
+          echo "ACCESSIBILITY=${ACCESSIBILITY}" >> $GITHUB_OUTPUT
+          echo "BEST_PRACTICES=${BEST_PRACTICES}" >> $GITHUB_OUTPUT
+          echo "SEO=${SEO}" >> $GITHUB_OUTPUT
+          echo "FCP=${FCP}" >> $GITHUB_OUTPUT
+          echo "SI=${SI}" >> $GITHUB_OUTPUT
+          echo "LCP=${LCP}" >> $GITHUB_OUTPUT
+          echo "TBT=${TBT}" >> $GITHUB_OUTPUT
+          echo "CLS=${CLS}" >> $GITHUB_OUTPUT
+
+          # Collect failing audits (score < 0.5)
+          echo "# Lighthouse Audit Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Score |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance | ${PERFORMANCE} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Accessibility | ${ACCESSIBILITY} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Best Practices | ${BEST_PRACTICES} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SEO | ${SEO} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| FCP (First Contentful Paint) | ${FCP} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SI (Speed Index) | ${SI} |" >> $GITHUB_STEP_SUMMARY
+          echo "| LCP (Largest Contentful Paint) | ${LCP} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TBT (Total Blocking Time) | ${TBT} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLS (Cumulative Layout Shift) | ${CLS} |" >> $GITHUB_STEP_SUMMARY
+
+          # Failing audits
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Требуются правки" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          jq -r '.audits | to_entries[] | select(.value.score != null and .value.score < 0.5) | "- **" + .value.title + ":** " + (.value.description // "нет описания") + " [Score: " + ((.value.score * 100) | floor | tostring) + "]"' lighthouse-report.json >> failing-audits.md 2>/dev/null || touch failing-audits.md
+          
+          FAIL_COUNT=$(wc -l < failing-audits.md)
+          
+          if [ "$FAIL_COUNT" -gt 0 ]; then
+            cat failing-audits.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Все проверки пройдены успешно. Серьёзных проблем не обнаружено." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📎 Полный отчёт доступен в [артефактах сборки](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: |
+            lighthouse-report.html
+            lighthouse-report.json
+          retention-days: 7
